@@ -4,6 +4,8 @@ const MAX_RETRIES = 5;
 const GM_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 1 day
 const GM_CACHE_KEY = "gm-list-v1";
 const ARCHIVE_PREFIX = "archive-v2:";
+const PROFILE_PREFIX = "profile-v1:";
+const PROFILE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const $ = (id) => document.getElementById(id);
 const form = $("form");
@@ -23,6 +25,7 @@ const sortEl = $("sort");
 
 let currentController = null;
 let lastWins = [];
+const liByName = new Map();
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -194,7 +197,7 @@ async function loadArchive(url, signal) {
   return { games };
 }
 
-async function processWithConcurrency(items, worker, concurrency, signal) {
+async function processWithConcurrency(items, worker, concurrency, signal, label) {
   let next = 0;
   let done = 0;
   const results = new Array(items.length);
@@ -212,13 +215,55 @@ async function processWithConcurrency(items, worker, concurrency, signal) {
         results[i] = { error: err };
       }
       done++;
-      setProgress(done, total, `Scanning archive ${done} of ${total}…`);
+      setProgress(done, total, label ? label(done, total) : `${done} of ${total}…`);
     }
   }
 
   const runners = Array.from({ length: Math.min(concurrency, total) }, () => pull());
   await Promise.all(runners);
   return results;
+}
+
+async function loadProfile(username, signal) {
+  const key = PROFILE_PREFIX + username;
+  const cached = sessionStorage.getItem(key);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (Date.now() - parsed.fetchedAt < PROFILE_TTL_MS) return parsed.data;
+    } catch { /* fall through */ }
+  }
+  const [profile, stats] = await Promise.all([
+    fetchJSON(`${API}/player/${encodeURIComponent(username)}`, signal),
+    fetchJSON(`${API}/player/${encodeURIComponent(username)}/stats`, signal),
+  ]);
+  const countryCode = profile.country?.match(/\/([A-Z]{2})$/)?.[1] ?? null;
+  const data = {
+    avatar: profile.avatar || null,
+    name: profile.name || null,
+    title: profile.title || null,
+    countryCode,
+    blitz: stats.chess_blitz?.last?.rating ?? null,
+    bullet: stats.chess_bullet?.last?.rating ?? null,
+    rapid: stats.chess_rapid?.last?.rating ?? null,
+    daily: stats.chess_daily?.last?.rating ?? null,
+    fide: stats.fide ?? null,
+    url: profile.url || `https://www.chess.com/member/${encodeURIComponent(username)}`,
+  };
+  try {
+    sessionStorage.setItem(key, JSON.stringify({ fetchedAt: Date.now(), data }));
+  } catch { /* quota — ignore */ }
+  return data;
+}
+
+function flagEmoji(cc) {
+  if (!cc || cc.length !== 2) return "";
+  const base = 127397;
+  return cc
+    .toUpperCase()
+    .split("")
+    .map((c) => String.fromCodePoint(c.charCodeAt(0) + base))
+    .join("");
 }
 
 async function run() {
@@ -264,7 +309,8 @@ async function run() {
       archives,
       async (url) => loadArchive(url, signal),
       CONCURRENCY,
-      signal
+      signal,
+      (done, total) => `Scanning archive ${done} of ${total}…`
     );
 
     if (signal.aborted) return;
@@ -307,9 +353,25 @@ async function run() {
       url: info.url,
       rating: info.opponentRating,
       moves: info.moveCount,
+      profile: null,
     }));
 
     showResults(raw, wins, gmSet.size);
+
+    if (wins.length > 0) {
+      await processWithConcurrency(
+        wins,
+        async (w) => {
+          const p = await loadProfile(w.name, signal);
+          w.profile = p;
+          updateRowInPlace(w);
+        },
+        CONCURRENCY,
+        signal,
+        (done, total) => `Fetching GM profile ${done} of ${total}…`
+      );
+      progressEl.hidden = true;
+    }
   } catch (err) {
     if (err.name === "AbortError") {
       progressText.textContent = "Cancelled.";
@@ -338,11 +400,15 @@ function showResults(username, wins, gmTotal) {
   renderList();
 }
 
+function strengthOf(w) {
+  return w.profile?.blitz ?? w.profile?.rapid ?? w.profile?.bullet ?? w.rating ?? -1;
+}
+
 function sortedWins() {
   const mode = sortEl.value;
   const copy = lastWins.slice();
   if (mode === "rating") {
-    copy.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
+    copy.sort((a, b) => strengthOf(b) - strengthOf(a));
   } else if (mode === "moves") {
     copy.sort((a, b) => (b.moves ?? -1) - (a.moves ?? -1));
   } else {
@@ -351,38 +417,109 @@ function sortedWins() {
   return copy;
 }
 
+function buildRow(w) {
+  const li = document.createElement("li");
+  li.className = "gm-card";
+
+  const avatar = document.createElement("img");
+  avatar.className = "gm-avatar";
+  avatar.alt = "";
+  avatar.loading = "lazy";
+  if (w.profile?.avatar) avatar.src = w.profile.avatar;
+  li.appendChild(avatar);
+
+  const body = document.createElement("div");
+  body.className = "gm-body";
+
+  const top = document.createElement("div");
+  top.className = "gm-top";
+  const nameLink = document.createElement("a");
+  nameLink.className = "gm-name";
+  nameLink.href = w.profile?.url || `https://www.chess.com/member/${encodeURIComponent(w.name)}`;
+  nameLink.target = "_blank";
+  nameLink.rel = "noopener";
+  nameLink.textContent = w.name;
+  top.appendChild(nameLink);
+  if (w.profile?.countryCode) {
+    const flag = document.createElement("span");
+    flag.className = "gm-flag";
+    flag.textContent = flagEmoji(w.profile.countryCode);
+    flag.title = w.profile.countryCode;
+    top.appendChild(flag);
+  }
+  if (w.profile?.title) {
+    const t = document.createElement("span");
+    t.className = "gm-title";
+    t.textContent = w.profile.title;
+    top.appendChild(t);
+  }
+  if (w.profile?.name) {
+    const realName = document.createElement("span");
+    realName.className = "gm-realname";
+    realName.textContent = w.profile.name;
+    top.appendChild(realName);
+  }
+  body.appendChild(top);
+
+  const ratings = document.createElement("div");
+  ratings.className = "gm-ratings";
+  if (w.profile) {
+    const chips = [
+      ["Blitz", w.profile.blitz],
+      ["Bullet", w.profile.bullet],
+      ["Rapid", w.profile.rapid],
+      ["Daily", w.profile.daily],
+    ];
+    for (const [label, val] of chips) {
+      if (val == null) continue;
+      const chip = document.createElement("span");
+      chip.className = "rating-chip";
+      chip.textContent = `${label} ${val}`;
+      ratings.appendChild(chip);
+    }
+    if (w.profile.fide) {
+      const chip = document.createElement("span");
+      chip.className = "rating-chip fide";
+      chip.textContent = `FIDE ${w.profile.fide}`;
+      ratings.appendChild(chip);
+    }
+  } else {
+    ratings.classList.add("loading");
+    ratings.textContent = "loading ratings…";
+  }
+  body.appendChild(ratings);
+
+  const meta = document.createElement("div");
+  meta.className = "gm-meta";
+  const parts = [`First win: ${formatDate(w.end_time)}`];
+  if (w.moves) parts.push(`${w.moves} moves`);
+  if (w.rating != null) parts.push(`opp. rated ${w.rating} at game`);
+  const gameLink = document.createElement("a");
+  gameLink.href = w.url;
+  gameLink.target = "_blank";
+  gameLink.rel = "noopener";
+  gameLink.textContent = "view game";
+  meta.append(parts.join(" · ") + " · ", gameLink);
+  body.appendChild(meta);
+
+  li.appendChild(body);
+  return li;
+}
+
 function renderList() {
   listEl.innerHTML = "";
+  liByName.clear();
   for (const w of sortedWins()) {
-    const li = document.createElement("li");
-
-    const left = document.createElement("div");
-    left.className = "gm-name";
-    const a = document.createElement("a");
-    a.href = `https://www.chess.com/member/${encodeURIComponent(w.name)}`;
-    a.target = "_blank";
-    a.rel = "noopener";
-    a.textContent = w.name;
-    left.appendChild(a);
-    if (w.rating != null) {
-      const badge = document.createElement("span");
-      badge.className = "rating-badge";
-      badge.textContent = String(w.rating);
-      left.appendChild(badge);
-    }
-
-    const right = document.createElement("div");
-    right.className = "gm-meta";
-    const parts = [`First win: ${formatDate(w.end_time)}`];
-    if (w.moves) parts.push(`${w.moves} moves`);
-    const gameLink = document.createElement("a");
-    gameLink.href = w.url;
-    gameLink.target = "_blank";
-    gameLink.rel = "noopener";
-    gameLink.textContent = "view game";
-    right.append(parts.join(" · ") + " · ", gameLink);
-
-    li.append(left, right);
+    const li = buildRow(w);
     listEl.appendChild(li);
+    liByName.set(w.name, li);
   }
+}
+
+function updateRowInPlace(w) {
+  const oldLi = liByName.get(w.name);
+  if (!oldLi) return;
+  const newLi = buildRow(w);
+  oldLi.replaceWith(newLi);
+  liByName.set(w.name, newLi);
 }

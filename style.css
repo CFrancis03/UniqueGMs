@@ -199,10 +199,80 @@ button:disabled {
   display: grid;
   gap: 0.5rem;
 }
+.gm-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 0.75rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
 
-.rating-badge {
+.gm-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bar-bg);
+  flex: none;
+}
+
+.gm-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.gm-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.gm-name {
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1.02rem;
+}
+.gm-name:hover { text-decoration: underline; }
+
+.gm-flag {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.gm-title {
   display: inline-block;
-  margin-left: 0.5rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.gm-realname {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.gm-ratings {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.gm-ratings.loading {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.rating-chip {
   padding: 0.1rem 0.5rem;
   border-radius: 999px;
   background: var(--bar-bg);
@@ -210,36 +280,26 @@ button:disabled {
   font-size: 0.8rem;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  vertical-align: middle;
 }
-.gm-list li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  background: var(--card);
+.rating-chip.fide {
+  background: transparent;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  flex-wrap: wrap;
 }
-.gm-name {
-  font-weight: 600;
-}
-.gm-name a {
-  color: inherit;
-  text-decoration: none;
-}
-.gm-name a:hover { text-decoration: underline; }
+
 .gm-meta {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
 }
 .gm-meta a {
   color: var(--accent);
   text-decoration: none;
 }
 .gm-meta a:hover { text-decoration: underline; }
+
+@media (max-width: 480px) {
+  .gm-avatar { width: 44px; height: 44px; }
+  .gm-name { font-size: 0.98rem; }
+}
 
 footer {
   margin-top: 3rem;
