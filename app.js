@@ -34,6 +34,7 @@ const sortEl = $("sort");
 const statsPanel = $("statsPanel");
 const chartPanel = $("chartPanel");
 const chartEl = $("chart");
+const jumpNav = $("jumpNav");
 
 let currentController = null;
 let lastWins = [];
@@ -47,6 +48,14 @@ cancelBtn.addEventListener("click", () => {
   if (currentController) currentController.abort();
 });
 sortEl.addEventListener("change", () => renderList());
+jumpNav.addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-jump]");
+  if (!a) return;
+  const target = document.getElementById(a.dataset.jump);
+  if (!target) return;
+  e.preventDefault();
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+});
 
 function setBusy(busy) {
   checkBtn.disabled = busy;
@@ -71,6 +80,7 @@ function clearUI() {
   statsPanel.innerHTML = "";
   chartPanel.hidden = true;
   chartEl.innerHTML = "";
+  jumpNav.hidden = true;
   progressEl.hidden = true;
   barFill.style.width = "0%";
   progressText.textContent = "";
@@ -432,6 +442,19 @@ function showResults(username, wins, gmTotal) {
   renderStats(wins);
   renderChart(wins);
   renderList();
+  updateJumpNav();
+}
+
+function updateJumpNav() {
+  const links = jumpNav.querySelectorAll("a[data-jump]");
+  let anyVisible = false;
+  for (const a of links) {
+    const target = document.getElementById(a.dataset.jump);
+    const visible = target && !target.hidden && target.childElementCount > 0;
+    a.hidden = !visible;
+    if (visible) anyVisible = true;
+  }
+  jumpNav.hidden = !anyVisible;
 }
 
 function renderStats(wins) {
