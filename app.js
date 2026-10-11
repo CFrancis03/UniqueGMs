@@ -3,7 +3,7 @@ const CONCURRENCY = 4;
 const MAX_RETRIES = 5;
 const GM_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 1 day
 const GM_CACHE_KEY = "gm-list-v1";
-const ARCHIVE_PREFIX = "archive-v1:";
+const ARCHIVE_PREFIX = "archive-v2:";
 
 const $ = (id) => document.getElementById(id);
 const form = $("form");
@@ -19,8 +19,10 @@ const resultsEl = $("results");
 const countEl = $("count");
 const metaEl = $("meta");
 const listEl = $("list");
+const sortEl = $("sort");
 
 let currentController = null;
+let lastWins = [];
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -29,6 +31,7 @@ form.addEventListener("submit", (e) => {
 cancelBtn.addEventListener("click", () => {
   if (currentController) currentController.abort();
 });
+sortEl.addEventListener("change", () => renderList());
 
 function setBusy(busy) {
   checkBtn.disabled = busy;
@@ -127,6 +130,20 @@ async function loadGMSet(signal) {
   return new Set(players);
 }
 
+function countMoves(pgn) {
+  if (!pgn) return 0;
+  const bodyStart = pgn.indexOf("\n\n");
+  const body = bodyStart >= 0 ? pgn.slice(bodyStart + 2) : pgn;
+  let max = 0;
+  const re = /(?:^|\s)(\d+)\.(?!\.)/g;
+  let m;
+  while ((m = re.exec(body)) !== null) {
+    const n = parseInt(m[1], 10);
+    if (n > max) max = n;
+  }
+  return max;
+}
+
 function currentYearMonth() {
   const d = new Date();
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
@@ -163,8 +180,11 @@ async function loadArchive(url, signal) {
     time_class: g.time_class,
     whiteName: g.white?.username?.toLowerCase() ?? "",
     whiteResult: g.white?.result ?? "",
+    whiteRating: g.white?.rating ?? null,
     blackName: g.black?.username?.toLowerCase() ?? "",
     blackResult: g.black?.result ?? "",
+    blackRating: g.black?.rating ?? null,
+    moveCount: countMoves(g.pgn),
   }));
   if (!isCurrentMonth(url)) {
     try {
@@ -266,9 +286,17 @@ async function run() {
         if (playerSide !== "win") continue;
         if (!gmSet.has(opponent)) continue;
 
+        const opponentRating =
+          g.whiteName === opponent ? g.whiteRating : g.blackRating;
+
         const existing = firstWinByOpponent.get(opponent);
         if (!existing || g.end_time < existing.end_time) {
-          firstWinByOpponent.set(opponent, { end_time: g.end_time, url: g.url });
+          firstWinByOpponent.set(opponent, {
+            end_time: g.end_time,
+            url: g.url,
+            opponentRating,
+            moveCount: g.moveCount,
+          });
         }
       }
     }
@@ -277,8 +305,9 @@ async function run() {
       name,
       end_time: info.end_time,
       url: info.url,
+      rating: info.opponentRating,
+      moves: info.moveCount,
     }));
-    wins.sort((a, b) => b.end_time - a.end_time);
 
     showResults(raw, wins, gmSet.size);
   } catch (err) {
@@ -304,10 +333,29 @@ function showResults(username, wins, gmTotal) {
   resultsEl.hidden = false;
   countEl.textContent = String(wins.length);
   metaEl.textContent =
-    `${username} · first-win date shown per opponent · ${gmTotal.toLocaleString()} GMs on the title list`;
+    `${username} · first-win data shown per opponent · ${gmTotal.toLocaleString()} GMs on the title list`;
+  lastWins = wins;
+  renderList();
+}
+
+function sortedWins() {
+  const mode = sortEl.value;
+  const copy = lastWins.slice();
+  if (mode === "rating") {
+    copy.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
+  } else if (mode === "moves") {
+    copy.sort((a, b) => (b.moves ?? -1) - (a.moves ?? -1));
+  } else {
+    copy.sort((a, b) => b.end_time - a.end_time);
+  }
+  return copy;
+}
+
+function renderList() {
   listEl.innerHTML = "";
-  for (const w of wins) {
+  for (const w of sortedWins()) {
     const li = document.createElement("li");
+
     const left = document.createElement("div");
     left.className = "gm-name";
     const a = document.createElement("a");
@@ -316,15 +364,23 @@ function showResults(username, wins, gmTotal) {
     a.rel = "noopener";
     a.textContent = w.name;
     left.appendChild(a);
+    if (w.rating != null) {
+      const badge = document.createElement("span");
+      badge.className = "rating-badge";
+      badge.textContent = String(w.rating);
+      left.appendChild(badge);
+    }
 
     const right = document.createElement("div");
     right.className = "gm-meta";
+    const parts = [`First win: ${formatDate(w.end_time)}`];
+    if (w.moves) parts.push(`${w.moves} moves`);
     const gameLink = document.createElement("a");
     gameLink.href = w.url;
     gameLink.target = "_blank";
     gameLink.rel = "noopener";
     gameLink.textContent = "view game";
-    right.append(`First win: ${formatDate(w.end_time)} · `, gameLink);
+    right.append(parts.join(" · ") + " · ", gameLink);
 
     li.append(left, right);
     listEl.appendChild(li);

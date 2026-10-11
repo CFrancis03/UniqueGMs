@@ -11,6 +11,10 @@
     <header>
       <h1>Unique GMs beaten</h1>
       <p class="sub">Enter a Chess.com username to count how many distinct Grandmasters they've defeated.</p>
+      <p class="warn">
+        Heads up: this is <strong>slow</strong>. Big accounts (like Hikaru or Magnus) have 100+ monthly archives
+        and can take a few minutes to scan. Sorry!
+      </p>
     </header>
 
     <form id="form" autocomplete="off">
@@ -45,6 +49,14 @@
         <span class="count-label">unique GMs beaten</span>
       </div>
       <div id="meta" class="meta"></div>
+      <div class="sort-row">
+        <label for="sort">Sort by</label>
+        <select id="sort">
+          <option value="date">Most recent win</option>
+          <option value="rating">Opponent rating (high → low)</option>
+          <option value="moves">Game length (most moves)</option>
+        </select>
+      </div>
       <ol id="list" class="gm-list"></ol>
     </section>
 

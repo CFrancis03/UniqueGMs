@@ -53,7 +53,17 @@ header h1 {
 }
 .sub {
   color: var(--muted);
-  margin: 0 0 2rem;
+  margin: 0 0 1rem;
+}
+
+.warn {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--card);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: var(--fg);
 }
 
 form .row {
@@ -165,12 +175,42 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.sort-row {
+  margin-top: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.sort-row select {
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  font-size: 0.9rem;
+}
+
 .gm-list {
-  margin-top: 1.5rem;
+  margin-top: 0.75rem;
   padding: 0;
   list-style: none;
   display: grid;
   gap: 0.5rem;
+}
+
+.rating-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--bar-bg);
+  color: var(--fg);
+  font-size: 0.8rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
 }
 .gm-list li {
   display: flex;

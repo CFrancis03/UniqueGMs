@@ -19,8 +19,11 @@ Opening `index.html` directly via `file://` also works in most browsers because 
 1. Fetches the GM title list (`/pub/titled/GM`) once per session and stores the lowercased usernames in a `Set`.
 2. Fetches the player's monthly archive index (`/pub/player/{user}/games/archives`).
 3. Fetches each monthly archive with a concurrency pool of 4. Past months are cached in `sessionStorage`; the current month is always refetched (it keeps growing).
-4. For every game where the player won, if the opponent's lowercased username is in the GM set, records a (opponent → earliest `end_time` + game URL) entry.
-5. Shows the total unique count as a big headline and lists each GM, sorted by most recent win first.
+4. For every game where the player won, if the opponent's lowercased username is in the GM set, records a (opponent → earliest `end_time` + game URL + opponent's rating + move count) entry.
+5. Shows the total unique count as a big headline and lists each GM. A dropdown lets you sort by:
+   - **Most recent win** (default)
+   - **Opponent rating** (highest first) — the opponent's rating in the first-win game
+   - **Game length** (most moves first) — full-move count parsed from the PGN
 
 ### Request behavior
 
