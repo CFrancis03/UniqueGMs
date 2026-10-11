@@ -1,4 +1,4 @@
-# Unique GMs Beaten
+# Unique GMs Beaten (random vibecode stuff)
 
 A single-page web app that takes a Chess.com username and shows how many unique Grandmasters that player has beaten, with a list of each GM, the date of the first win against them, and a link to that game.
 
