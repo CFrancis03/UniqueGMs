@@ -69,11 +69,10 @@ function clearUI() {
   progressText.textContent = "";
 }
 
-function setProgress(current, total, label) {
+function setProgressPct(pct, label) {
   progressEl.hidden = false;
-  const pct = total > 0 ? Math.round((current / total) * 100) : 0;
-  barFill.style.width = pct + "%";
-  progressText.textContent = label ?? `Scanning archive ${current} of ${total}…`;
+  barFill.style.width = Math.max(0, Math.min(100, pct)) + "%";
+  if (label != null) progressText.textContent = label;
 }
 
 async function sleep(ms, signal) {
@@ -314,13 +313,13 @@ async function run() {
     let profilesDone = 0;
 
     function tick(phase) {
-      const done = archivesDone + profilesDone;
-      const total = totalArchives + totalProfiles;
-      const label =
-        phase === "archive"
-          ? `Scanning archive ${archivesDone} of ${totalArchives}…`
-          : `Loading GM profile ${profilesDone} of ${totalProfiles}…`;
-      setProgress(done, total, label);
+      if (phase === "archive") {
+        const frac = totalArchives > 0 ? archivesDone / totalArchives : 0;
+        setProgressPct(frac * 50, `Scanning archive ${archivesDone} of ${totalArchives}…`);
+      } else {
+        const frac = totalProfiles > 0 ? profilesDone / totalProfiles : 1;
+        setProgressPct(50 + frac * 50, `Loading GM profile ${profilesDone} of ${totalProfiles}…`);
+      }
     }
 
     tick("archive");
