@@ -7,6 +7,15 @@ const ARCHIVE_PREFIX = "archive-v2:";
 const PROFILE_PREFIX = "profile-v1:";
 const PROFILE_TTL_MS = 24 * 60 * 60 * 1000;
 
+const DEFAULT_AVATAR =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+      '<rect width="100" height="100" fill="#2a2a2a"/>' +
+      '<text x="50" y="78" text-anchor="middle" font-family="serif" font-size="80" fill="#bbb">♞</text>' +
+      "</svg>"
+  );
+
 const $ = (id) => document.getElementById(id);
 const form = $("form");
 const usernameInput = $("username");
@@ -197,9 +206,8 @@ async function loadArchive(url, signal) {
   return { games };
 }
 
-async function processWithConcurrency(items, worker, concurrency, signal, label) {
+async function processWithConcurrency(items, worker, concurrency, signal, onProgress) {
   let next = 0;
-  let done = 0;
   const results = new Array(items.length);
   const total = items.length;
 
@@ -214,8 +222,7 @@ async function processWithConcurrency(items, worker, concurrency, signal, label)
         if (err.name === "AbortError") return;
         results[i] = { error: err };
       }
-      done++;
-      setProgress(done, total, label ? label(done, total) : `${done} of ${total}…`);
+      onProgress?.();
     }
   }
 
@@ -301,7 +308,22 @@ async function run() {
       return;
     }
 
-    setProgress(0, archives.length);
+    const totalArchives = archives.length;
+    let archivesDone = 0;
+    let totalProfiles = 0;
+    let profilesDone = 0;
+
+    function tick(phase) {
+      const done = archivesDone + profilesDone;
+      const total = totalArchives + totalProfiles;
+      const label =
+        phase === "archive"
+          ? `Scanning archive ${archivesDone} of ${totalArchives}…`
+          : `Loading GM profile ${profilesDone} of ${totalProfiles}…`;
+      setProgress(done, total, label);
+    }
+
+    tick("archive");
 
     const firstWinByOpponent = new Map();
 
@@ -310,7 +332,7 @@ async function run() {
       async (url) => loadArchive(url, signal),
       CONCURRENCY,
       signal,
-      (done, total) => `Scanning archive ${done} of ${total}…`
+      () => { archivesDone++; tick("archive"); }
     );
 
     if (signal.aborted) return;
@@ -356,22 +378,26 @@ async function run() {
       profile: null,
     }));
 
-    showResults(raw, wins, gmSet.size);
+    totalProfiles = wins.length;
+    tick("profile");
 
     if (wins.length > 0) {
       await processWithConcurrency(
         wins,
         async (w) => {
-          const p = await loadProfile(w.name, signal);
-          w.profile = p;
-          updateRowInPlace(w);
+          try {
+            w.profile = await loadProfile(w.name, signal);
+          } catch { /* leave profile null, still render card */ }
         },
         CONCURRENCY,
         signal,
-        (done, total) => `Fetching GM profile ${done} of ${total}…`
+        () => { profilesDone++; tick("profile"); }
       );
-      progressEl.hidden = true;
     }
+
+    if (signal.aborted) return;
+
+    showResults(raw, wins, gmSet.size);
   } catch (err) {
     if (err.name === "AbortError") {
       progressText.textContent = "Cancelled.";
@@ -425,7 +451,8 @@ function buildRow(w) {
   avatar.className = "gm-avatar";
   avatar.alt = "";
   avatar.loading = "lazy";
-  if (w.profile?.avatar) avatar.src = w.profile.avatar;
+  avatar.src = w.profile?.avatar || DEFAULT_AVATAR;
+  avatar.addEventListener("error", () => { avatar.src = DEFAULT_AVATAR; }, { once: true });
   li.appendChild(avatar);
 
   const body = document.createElement("div");
@@ -483,11 +510,8 @@ function buildRow(w) {
       chip.textContent = `FIDE ${w.profile.fide}`;
       ratings.appendChild(chip);
     }
-  } else {
-    ratings.classList.add("loading");
-    ratings.textContent = "loading ratings…";
   }
-  body.appendChild(ratings);
+  if (ratings.childElementCount > 0) body.appendChild(ratings);
 
   const meta = document.createElement("div");
   meta.className = "gm-meta";
@@ -516,10 +540,3 @@ function renderList() {
   }
 }
 
-function updateRowInPlace(w) {
-  const oldLi = liByName.get(w.name);
-  if (!oldLi) return;
-  const newLi = buildRow(w);
-  oldLi.replaceWith(newLi);
-  liByName.set(w.name, newLi);
-}
