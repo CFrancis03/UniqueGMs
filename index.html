@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Unique GMs Beaten · Chess.com</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Unique GMs beaten</h1>
+      <p class="sub">Enter a Chess.com username to count how many distinct Grandmasters they've defeated.</p>
+    </header>
+
+    <form id="form" autocomplete="off">
+      <div class="row">
+        <input
+          id="username"
+          type="text"
+          placeholder="e.g. hikaru"
+          spellcheck="false"
+          autocapitalize="off"
+          required
+        />
+        <button id="check" type="submit">Check</button>
+        <button id="cancel" type="button" hidden>Cancel</button>
+      </div>
+      <label class="variants">
+        <input id="variants" type="checkbox" />
+        <span>Include variants (chess960, bughouse, etc.)</span>
+      </label>
+    </form>
+
+    <section id="progress" class="progress" hidden>
+      <div class="bar"><div id="barFill" class="bar-fill"></div></div>
+      <div id="progressText" class="progress-text">Starting…</div>
+    </section>
+
+    <section id="error" class="error" hidden></section>
+
+    <section id="results" class="results" hidden>
+      <div class="headline">
+        <span id="count" class="count">0</span>
+        <span class="count-label">unique GMs beaten</span>
+      </div>
+      <div id="meta" class="meta"></div>
+      <ol id="list" class="gm-list"></ol>
+    </section>
+
+    <footer>
+      <p>
+        Data: <a href="https://www.chess.com/news/view/published-data-api" target="_blank" rel="noopener">Chess.com Public API</a>.
+        Only players currently on the GM title list are counted.
+      </p>
+    </footer>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
