@@ -31,6 +31,9 @@ const countEl = $("count");
 const metaEl = $("meta");
 const listEl = $("list");
 const sortEl = $("sort");
+const statsPanel = $("statsPanel");
+const chartPanel = $("chartPanel");
+const chartEl = $("chart");
 
 let currentController = null;
 let lastWins = [];
@@ -64,6 +67,10 @@ function clearUI() {
   listEl.innerHTML = "";
   countEl.textContent = "0";
   metaEl.textContent = "";
+  statsPanel.hidden = true;
+  statsPanel.innerHTML = "";
+  chartPanel.hidden = true;
+  chartEl.innerHTML = "";
   progressEl.hidden = true;
   barFill.style.width = "0%";
   progressText.textContent = "";
@@ -422,7 +429,153 @@ function showResults(username, wins, gmTotal) {
   metaEl.textContent =
     `${username} · first-win data shown per opponent · ${gmTotal.toLocaleString()} GMs on the title list`;
   lastWins = wins;
+  renderStats(wins);
+  renderChart(wins);
   renderList();
+}
+
+function renderStats(wins) {
+  statsPanel.innerHTML = "";
+  if (wins.length === 0) {
+    statsPanel.hidden = true;
+    return;
+  }
+
+  const sorted = wins.slice().sort((a, b) => a.end_time - b.end_time);
+  const first = sorted[0];
+  const latest = sorted[sorted.length - 1];
+
+  const rated = wins.filter((w) => w.rating != null);
+  const highest = rated.length
+    ? rated.reduce((a, b) => (b.rating > a.rating ? b : a))
+    : null;
+
+  const moves = wins.map((w) => w.moves).filter((m) => m > 0).sort((a, b) => a - b);
+  const median = moves.length
+    ? moves.length % 2
+      ? moves[(moves.length - 1) / 2]
+      : Math.round((moves[moves.length / 2 - 1] + moves[moves.length / 2]) / 2)
+    : null;
+
+  const spanSec = latest.end_time - first.end_time;
+  const spanYears = spanSec / (365.25 * 24 * 3600);
+  const perYear = spanYears >= 1 ? (wins.length / spanYears) : null;
+
+  const tiles = [
+    tile(first.name, `in ${new Date(first.end_time * 1000).getUTCFullYear()}`, "First GM beaten"),
+    tile(latest.name, formatDate(latest.end_time), "Most recent"),
+    highest ? tile(highest.name, `rated ${highest.rating}`, "Highest-rated (at game)") : null,
+    median != null ? tile(`${median}`, "moves", "Median game length") : null,
+    perYear != null ? tile(perYear.toFixed(1), "GMs / year", "Pace") : null,
+  ].filter(Boolean);
+
+  for (const t of tiles) statsPanel.appendChild(t);
+  statsPanel.hidden = false;
+}
+
+function tile(value, sub, label) {
+  const div = document.createElement("div");
+  div.className = "stat";
+  const v = document.createElement("div");
+  v.className = "stat-value";
+  v.textContent = value;
+  div.appendChild(v);
+  if (sub) {
+    const s = document.createElement("div");
+    s.className = "stat-sub";
+    s.textContent = sub;
+    div.appendChild(s);
+  }
+  const l = document.createElement("div");
+  l.className = "stat-label";
+  l.textContent = label;
+  div.appendChild(l);
+  return div;
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function svgEl(name, attrs = {}) {
+  const el = document.createElementNS(SVG_NS, name);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+  return el;
+}
+
+function renderChart(wins) {
+  chartEl.innerHTML = "";
+  if (wins.length < 2) {
+    chartPanel.hidden = true;
+    return;
+  }
+
+  const sorted = wins.slice().sort((a, b) => a.end_time - b.end_time);
+  const t0 = sorted[0].end_time;
+  const t1 = sorted[sorted.length - 1].end_time;
+  const n = sorted.length;
+
+  const W = 600, H = 240;
+  const PAD_L = 40, PAD_R = 12, PAD_T = 12, PAD_B = 28;
+  const innerW = W - PAD_L - PAD_R;
+  const innerH = H - PAD_T - PAD_B;
+
+  const xOf = (t) => PAD_L + ((t - t0) / (t1 - t0 || 1)) * innerW;
+  const yOf = (c) => PAD_T + innerH - (c / n) * innerH;
+
+  const svg = svgEl("svg", {
+    viewBox: `0 0 ${W} ${H}`,
+    role: "img",
+    "aria-label": "Cumulative unique GMs beaten over time",
+  });
+
+  const gridTicks = 4;
+  for (let i = 0; i <= gridTicks; i++) {
+    const frac = i / gridTicks;
+    const y = PAD_T + innerH - frac * innerH;
+    const value = Math.round(frac * n);
+    svg.appendChild(svgEl("line", {
+      class: "grid", x1: PAD_L, y1: y, x2: W - PAD_R, y2: y,
+    }));
+    const txt = svgEl("text", {
+      class: "axis-label", x: PAD_L - 6, y: y + 3, "text-anchor": "end",
+    });
+    txt.textContent = String(value);
+    svg.appendChild(txt);
+  }
+
+  const y0 = new Date(t0 * 1000).getUTCFullYear();
+  const y1 = new Date(t1 * 1000).getUTCFullYear();
+  const years = [];
+  if (y1 - y0 >= 1) {
+    years.push(y0);
+    if (y1 - y0 >= 4) {
+      const mid = Math.round((y0 + y1) / 2);
+      if (mid !== y0 && mid !== y1) years.push(mid);
+    }
+    years.push(y1);
+  } else {
+    years.push(y0);
+    if (y1 !== y0) years.push(y1);
+  }
+  for (const y of years) {
+    const t = Date.UTC(y, 0, 1) / 1000;
+    const clamped = Math.min(Math.max(t, t0), t1);
+    const x = xOf(clamped);
+    const txt = svgEl("text", {
+      class: "axis-label", x, y: H - 10, "text-anchor": "middle",
+    });
+    txt.textContent = String(y);
+    svg.appendChild(txt);
+  }
+
+  const pts = sorted.map((w, i) => `${xOf(w.end_time)},${yOf(i + 1)}`);
+
+  const areaD = `M ${xOf(t0)},${yOf(0)} L ${pts.join(" L ")} L ${xOf(t1)},${yOf(0)} Z`;
+  svg.appendChild(svgEl("path", { class: "area", d: areaD }));
+
+  svg.appendChild(svgEl("polyline", { class: "line", points: pts.join(" ") }));
+
+  chartEl.appendChild(svg);
+  chartPanel.hidden = false;
 }
 
 function strengthOf(w) {

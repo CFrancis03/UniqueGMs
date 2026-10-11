@@ -154,7 +154,8 @@ button:disabled {
 .headline {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  text-align: center;
   padding: 1.5rem;
   background: var(--card);
   border-radius: 12px;
@@ -300,6 +301,60 @@ button:disabled {
   .gm-avatar { width: 44px; height: 44px; }
   .gm-name { font-size: 0.98rem; }
 }
+
+.stats-panel {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.5rem;
+}
+.stat {
+  padding: 0.75rem 0.9rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.stat-value {
+  font-weight: 700;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+.stat-sub {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  margin-top: 0.05rem;
+}
+.stat-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.chart-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.chart-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.chart .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .area { fill: var(--accent); opacity: 0.12; }
+.chart .grid { stroke: var(--border); stroke-width: 1; }
+.chart .axis-label { fill: var(--muted); font-size: 11px; font-family: inherit; }
 
 footer {
   margin-top: 3rem;
