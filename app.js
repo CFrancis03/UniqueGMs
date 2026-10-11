@@ -7,6 +7,12 @@ const ARCHIVE_PREFIX = "archive-v2:";
 const PROFILE_PREFIX = "profile-v1:";
 const PROFILE_TTL_MS = 24 * 60 * 60 * 1000;
 
+const TITLE_PLURAL = {
+  GM: "GMs", IM: "IMs", FM: "FMs", CM: "CMs", NM: "NMs",
+  WGM: "WGMs", WIM: "WIMs", WFM: "WFMs", WCM: "WCMs", WNM: "WNMs",
+};
+const pluralOf = (abbr) => TITLE_PLURAL[abbr] ?? `${abbr}s`;
+
 const DEFAULT_AVATAR =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(
@@ -22,6 +28,7 @@ const usernameInput = $("username");
 const checkBtn = $("check");
 const cancelBtn = $("cancel");
 const variantsInput = $("variants");
+const titleInput = $("title");
 const progressEl = $("progress");
 const progressText = $("progressText");
 const barFill = $("barFill");
@@ -35,6 +42,9 @@ const statsPanel = $("statsPanel");
 const chartPanel = $("chartPanel");
 const chartEl = $("chart");
 const jumpNav = $("jumpNav");
+const countLabelEl = document.querySelector(".count-label");
+const chartTitleEl = document.querySelector(".chart-title");
+const listJumpLink = jumpNav.querySelector('a[data-jump="list"]');
 
 let currentController = null;
 let lastWins = [];
@@ -61,6 +71,7 @@ function setBusy(busy) {
   checkBtn.disabled = busy;
   usernameInput.disabled = busy;
   variantsInput.disabled = busy;
+  titleInput.disabled = busy;
   cancelBtn.hidden = !busy;
 }
 
@@ -140,8 +151,9 @@ async function fetchJSON(url, signal, attempt = 0) {
   return res.json();
 }
 
-async function loadGMSet(signal) {
-  const cached = sessionStorage.getItem(GM_CACHE_KEY);
+async function loadTitleSet(titleAbbr, signal) {
+  const key = `${GM_CACHE_KEY}:${titleAbbr}`;
+  const cached = sessionStorage.getItem(key);
   if (cached) {
     try {
       const parsed = JSON.parse(cached);
@@ -150,10 +162,10 @@ async function loadGMSet(signal) {
       }
     } catch { /* fall through */ }
   }
-  const data = await fetchJSON(`${API}/titled/GM`, signal);
+  const data = await fetchJSON(`${API}/titled/${encodeURIComponent(titleAbbr)}`, signal);
   const players = (data.players || []).map((p) => p.toLowerCase());
   try {
-    sessionStorage.setItem(GM_CACHE_KEY, JSON.stringify({ fetchedAt: Date.now(), players }));
+    sessionStorage.setItem(key, JSON.stringify({ fetchedAt: Date.now(), players }));
   } catch { /* quota — ignore */ }
   return new Set(players);
 }
@@ -302,11 +314,13 @@ async function run() {
   const { signal } = controller;
 
   const includeVariants = variantsInput.checked;
+  const titleAbbr = titleInput.value || "GM";
+  const titlePlural = pluralOf(titleAbbr);
 
   try {
-    progressText.textContent = "Fetching GM list…";
+    progressText.textContent = `Fetching ${titleAbbr} list…`;
     progressEl.hidden = false;
-    const gmSet = await loadGMSet(signal);
+    const titleSet = await loadTitleSet(titleAbbr, signal);
 
     progressText.textContent = "Fetching archive list…";
     let archivesData;
@@ -320,7 +334,7 @@ async function run() {
     }
     const archives = archivesData.archives || [];
     if (archives.length === 0) {
-      showResults(raw, [], gmSet.size);
+      showResults(raw, [], titleSet.size, titleAbbr, titlePlural);
       return;
     }
 
@@ -335,7 +349,7 @@ async function run() {
         setProgressPct(frac * 50, `Scanning archive ${archivesDone} of ${totalArchives}…`);
       } else {
         const frac = totalProfiles > 0 ? profilesDone / totalProfiles : 1;
-        setProgressPct(50 + frac * 50, `Loading GM profile ${profilesDone} of ${totalProfiles}…`);
+        setProgressPct(50 + frac * 50, `Loading ${titleAbbr} profile ${profilesDone} of ${totalProfiles}…`);
       }
     }
 
@@ -368,7 +382,7 @@ async function run() {
           continue;
         }
         if (playerSide !== "win") continue;
-        if (!gmSet.has(opponent)) continue;
+        if (!titleSet.has(opponent)) continue;
 
         const opponentRating =
           g.whiteName === opponent ? g.whiteRating : g.blackRating;
@@ -413,7 +427,7 @@ async function run() {
 
     if (signal.aborted) return;
 
-    showResults(raw, wins, gmSet.size);
+    showResults(raw, wins, titleSet.size, titleAbbr, titlePlural);
   } catch (err) {
     if (err.name === "AbortError") {
       progressText.textContent = "Cancelled.";
@@ -432,15 +446,18 @@ function formatDate(ts) {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-function showResults(username, wins, gmTotal) {
+function showResults(username, wins, titleTotal, titleAbbr, titlePlural) {
   progressEl.hidden = true;
   resultsEl.hidden = false;
   countEl.textContent = String(wins.length);
+  countLabelEl.textContent = `unique ${titlePlural} beaten`;
+  chartTitleEl.textContent = `${titlePlural} beaten over time`;
+  if (listJumpLink) listJumpLink.textContent = `${titleAbbr} list`;
   metaEl.textContent =
-    `${username} · first-win data shown per opponent · ${gmTotal.toLocaleString()} GMs on the title list`;
+    `${username} · first-win data shown per opponent · ${titleTotal.toLocaleString()} ${titlePlural} on the title list`;
   lastWins = wins;
-  renderStats(wins);
-  renderChart(wins);
+  renderStats(wins, titleAbbr, titlePlural);
+  renderChart(wins, titlePlural);
   renderList();
   updateJumpNav();
 }
@@ -457,7 +474,7 @@ function updateJumpNav() {
   jumpNav.hidden = !anyVisible;
 }
 
-function renderStats(wins) {
+function renderStats(wins, titleAbbr, titlePlural) {
   statsPanel.innerHTML = "";
   if (wins.length === 0) {
     statsPanel.hidden = true;
@@ -485,11 +502,11 @@ function renderStats(wins) {
   const perYear = spanYears >= 1 ? (wins.length / spanYears) : null;
 
   const tiles = [
-    tile(first.name, `in ${new Date(first.end_time * 1000).getUTCFullYear()}`, "First GM beaten"),
+    tile(first.name, `in ${new Date(first.end_time * 1000).getUTCFullYear()}`, `First ${titleAbbr} beaten`),
     tile(latest.name, formatDate(latest.end_time), "Most recent"),
     highest ? tile(highest.name, `rated ${highest.rating}`, "Highest-rated (at game)") : null,
     median != null ? tile(`${median}`, "moves", "Median game length") : null,
-    perYear != null ? tile(perYear.toFixed(1), "GMs / year", "Pace") : null,
+    perYear != null ? tile(perYear.toFixed(1), `${titlePlural} / year`, "Pace") : null,
   ].filter(Boolean);
 
   for (const t of tiles) statsPanel.appendChild(t);
@@ -524,7 +541,7 @@ function svgEl(name, attrs = {}) {
   return el;
 }
 
-function renderChart(wins) {
+function renderChart(wins, titlePlural) {
   chartEl.innerHTML = "";
   if (wins.length < 2) {
     chartPanel.hidden = true;
@@ -547,7 +564,7 @@ function renderChart(wins) {
   const svg = svgEl("svg", {
     viewBox: `0 0 ${W} ${H}`,
     role: "img",
-    "aria-label": "Cumulative unique GMs beaten over time",
+    "aria-label": `Cumulative unique ${titlePlural} beaten over time`,
   });
 
   const gridTicks = 4;

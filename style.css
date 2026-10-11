@@ -107,6 +107,23 @@ button:disabled {
   border: 1px solid var(--border);
 }
 
+.title-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.title-pick select {
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  font-size: 0.9rem;
+}
+
 .variants {
   display: flex;
   align-items: center;

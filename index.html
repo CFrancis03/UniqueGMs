@@ -10,7 +10,7 @@
   <main>
     <header>
       <h1>Unique GMs beaten</h1>
-      <p class="sub">Enter a Chess.com username to count how many distinct Grandmasters they've defeated.</p>
+      <p class="sub">Enter a Chess.com username to count how many distinct titled players they've defeated.</p>
       <p class="warn">
         Heads up: this is <strong>slow</strong>. Big accounts (like Hikaru or Magnus) have 100+ monthly archives
         and can take a few minutes to scan. Sorry!
@@ -30,6 +30,21 @@
         <button id="check" type="submit">Check</button>
         <button id="cancel" type="button" hidden>Cancel</button>
       </div>
+      <label class="title-pick">
+        <span>Title</span>
+        <select id="title">
+          <option value="GM" selected>Grandmaster (GM)</option>
+          <option value="IM">International Master (IM)</option>
+          <option value="FM">FIDE Master (FM)</option>
+          <option value="CM">Candidate Master (CM)</option>
+          <option value="NM">National Master (NM)</option>
+          <option value="WGM">Woman Grandmaster (WGM)</option>
+          <option value="WIM">Woman International Master (WIM)</option>
+          <option value="WFM">Woman FIDE Master (WFM)</option>
+          <option value="WCM">Woman Candidate Master (WCM)</option>
+          <option value="WNM">Woman National Master (WNM)</option>
+        </select>
+      </label>
       <label class="variants">
         <input id="variants" type="checkbox" />
         <span>Include variants (chess960, bughouse, etc.)</span>
@@ -73,7 +88,7 @@
     <footer>
       <p>
         Data: <a href="https://www.chess.com/news/view/published-data-api" target="_blank" rel="noopener">Chess.com Public API</a>.
-        Only players currently on the GM title list are counted.
+        Only players currently on the chosen title list are counted.
       </p>
     </footer>
   </main>
